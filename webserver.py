@@ -55,7 +55,18 @@ def get_resource_path(relative_path):
 
 # ==================== 初始化Flask + WebSocket =====================
 app = Flask(__name__, static_folder=get_resource_path('frontend'), static_url_path='')
-CORS(app, supports_credentials=True)  # 增强跨域配置
+# 增强跨域配置：适配Cloud Studio的跨域/代理场景
+CORS(app, supports_credentials=True, resources={
+    r"/*": {
+        "origins": "*",  # 云环境临时放宽跨域（生产环境可指定具体域名）
+        "allow_headers": "*",
+        "expose_headers": "*"
+    }
+})
+# 适配Cloud Studio反向代理的核心配置
+app.config['PREFERRED_URL_SCHEME'] = 'https'  # 优先HTTPS协议
+app.config['TRUSTED_PROXIES'] = ['0.0.0.0/0']  # 信任所有代理（仅云环境）
+
 sock = Sock(app)  # 初始化WebSocket
 
 
@@ -242,18 +253,26 @@ def handle_websocket(ws):
 # ==================== WebSocket核心接口（前端页面） =====================
 @sock.route('/ws/frontend')
 def handle_frontend_websocket(ws):
-    """处理前端页面的WebSocket连接（修复鉴权逻辑）"""
-    # 修复点：放宽鉴权逻辑，兼容referer为空的场景（本地访问/直接打开页面）
+    """处理前端页面的WebSocket连接（适配Cloud Studio代理）"""
     env = ws.environ
+    # 兼容Cloud Studio反向代理的Referer/Host
     referer = env.get('HTTP_REFERER', '')
     host = env.get('HTTP_HOST', '')
+    x_forwarded_host = env.get('HTTP_X_FORWARDED_HOST', '')
     remote_addr = env.get('REMOTE_ADDR', '')
 
-    # 允许的情况：1.referer包含当前host 2.本地访问（127.0.0.1/localhost） 3.referer为空（直接打开页面）
+    # 允许的情况：
+    # 1. Referer包含当前Host/代理转发的Host
+    # 2. Cloud Studio的预览域名（含 mycloudstudio.net）
+    # 3. 本地调试/空Referer
     is_allowed = False
-    if referer and referer.startswith(f'http://{host}'):
+    allowed_domains = [host, x_forwarded_host, 'mycloudstudio.net']
+    if any(domain and referer.find(domain) != -1 for domain in allowed_domains):
         is_allowed = True
     elif remote_addr in ['127.0.0.1', 'localhost'] or referer == '':
+        is_allowed = True
+    # 额外放行Cloud Studio的预览域名
+    elif 'mycloudstudio.net' in referer or 'mycloudstudio.net' in host:
         is_allowed = True
 
     if not is_allowed:
@@ -295,11 +314,12 @@ def handle_frontend_websocket(ws):
 
 # ==================== 启动入口 =====================
 if __name__ == '__main__':
-    # 关键配置：debug=False + use_reloader=False + threaded=True
+    # 关键配置：适配Cloud Studio反向代理 + 多线程并发
     app.run(
         host='0.0.0.0',
-        port=5000,
+        port=80,
         debug=False,
         use_reloader=False,
-        threaded=True  # 开启多线程，支持并发WebSocket连接
+        threaded=True,  # 开启多线程，支持并发WebSocket连接
+        proxy_headers=True  # 信任代理头（关键：适配Cloud Studio反向代理）
     )
