@@ -226,9 +226,11 @@
         let pollInterval = null; // 轮询定时器
         let reconnectCount = 0; // WebSocket重连计数器
         const MAX_RECONNECT_COUNT = 10; // 最大重连次数
+        // 核心修改：动态适配协议（HTTPS→wss，HTTP→ws）
+        const isHTTPS = window.location.protocol === 'https:';
         const SERVER_HOST = window.location.host;
-        const WS_URL = `ws://${SERVER_HOST}/ws/frontend`;
-        const HTTP_URL = `http://${SERVER_HOST}`;
+        const WS_URL = `${isHTTPS ? 'wss://' : 'ws://'}${SERVER_HOST}/ws/frontend`;
+        const HTTP_URL = `${window.location.protocol}//${SERVER_HOST}`;
 
         // 页面加载完成初始化
         window.onload = function() {
@@ -297,7 +299,7 @@
                 ws.onclose = function() {
                     updateConnStatus(false);
                     reconnectCount++;
-                    const delay = Math.min(3 * reconnectCount, 30); // 重连间隔递增（3s→6s→...→30s）
+                    const delay = Math.min(5 * reconnectCount, 30); // 优化重连间隔（5s→10s→...→30s）
                     showStatus(`WebSocket连接断开，${delay}秒后尝试重连（剩余${MAX_RECONNECT_COUNT - reconnectCount}次）`, 'error');
                     setTimeout(initWebSocket, delay * 1000);
                 };
@@ -414,7 +416,6 @@
                 currentTask.update_time = new Date().toLocaleString();
             }
             renderCurrentTask();
-            //showStatus(`任务${taskData.task_id}处理完成`, 'success');
         }
 
         // 渲染当前任务
@@ -490,7 +491,6 @@
                             currentTask.status = 'success';
                             currentTask.update_time = new Date().toLocaleString();
                             renderCurrentTask();
-                            //showStatus(`任务${currentTask.task_id}处理完成（轮询）`, 'success');
                             clearInterval(pollInterval);
                             pollInterval = null;
                         }
