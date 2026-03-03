@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>动态码处理系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+        body {
+            background: #f5f7fa;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #1f2937;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #374151;
+            font-size: 14px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+        }
+        .form-group input.error {
+            border-color: #ef4444;
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+        }
+        .btn:hover:not(:disabled) {
+            background: #2563eb;
+        }
+        .status-bar {
+            margin: 20px 0;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: center;
+        }
+        .status-success {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status-error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .status-info {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+        .result-panel {
+            margin-top: 30px;
+            border-top: 1px solid #e5e7eb;
+            padding-top: 30px;
+        }
+        .result-panel h3 {
+            font-size: 18px;
+            color: #374151;
+            margin-bottom: 16px;
+        }
+        .result-card {
+            background: #f9fafb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            border-left: 4px solid #3b82f6;
+        }
+        .result-card.processing {
+            border-left-color: #f59e0b;
+        }
+        .result-card.success {
+            border-left-color: #10b981;
+        }
+        .result-card .task-id {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 8px;
+        }
+        .result-card .result-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #1f2937;
+            white-space: pre-wrap;
+        }
+        .result-actions {
+            margin-top: 8px;
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-copy {
+            background: #e5e7eb;
+            color: #374151;
+        }
+        .btn-copy:hover {
+            background: #d1d5db;
+        }
+        .empty-tip {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #ef4444;
+            box-shadow: 0 0 8px rgba(239,68,68,0.5);
+        }
+        .connection-status.connected {
+            background: #10b981;
+            box-shadow: 0 0 8px rgba(16,185,129,0.5);
+        }
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            .connection-status {
+                top: 10px;
+                right: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 实时连接状态指示灯 -->
+    <div class="connection-status" id="connStatus"></div>
+
+    <div class="container">
+        <div class="header">
+            <h1>动态码处理系统</h1>
+            <p>提交授权码+8位动态码，实时获取处理结果</p>
+        </div>
+
+        <!-- 输入表单 -->
+        <div class="form-group">
+            <label for="authCode">授权码</label>
+            <input type="text" id="authCode" placeholder="请输入有效的授权码" autocomplete="off">
+        </div>
+        <div class="form-group">
+            <label for="dynamicCode">8位动态码</label>
+            <input type="text" id="dynamicCode" placeholder="请输入8位纯数字动态码" autocomplete="off" maxlength="8">
+        </div>
+        <button class="btn" id="submitBtn" onclick="submitTask()">提交处理</button>
+
+        <!-- 状态提示 -->
+        <div class="status-bar" id="statusBar" style="display: none;"></div>
+
+        <!-- 结果展示面板 -->
+        <div class="result-panel">
+            <h3>当前任务结果</h3>
+            <div id="currentTaskResult">
+                <div class="empty-tip">暂无任务，提交后将展示此处</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量：仅保留当前任务（不存历史）
+        let currentTask = null;
+        let ws = null;
+        let pollInterval = null; // 轮询定时器
+        let reconnectCount = 0; // WebSocket重连计数器
+        const MAX_RECONNECT_COUNT = 10; // 最大重连次数
+        const SERVER_HOST = window.location.host;
+        const WS_URL = `ws://${SERVER_HOST}/ws/frontend`;
+        const HTTP_URL = `http://${SERVER_HOST}`;
+
+        // 页面加载完成初始化
+        window.onload = function() {
+            // 监听网络状态
+            window.addEventListener('online', () => {
+                showStatus('网络已恢复，重新连接WebSocket...', 'info');
+                reconnectCount = 0;
+                initWebSocket();
+            });
+            window.addEventListener('offline', () => {
+                showStatus('网络已断开，请检查网络连接', 'error');
+            });
+
+            initWebSocket();
+
+            // 输入框实时校验
+            document.getElementById('dynamicCode').addEventListener('input', function(e) {
+                this.value = this.value.replace(/\D/g, '');
+                checkInputValid();
+            });
+            document.getElementById('authCode').addEventListener('input', checkInputValid);
+        };
+
+        // 初始化前端WebSocket
+        function initWebSocket() {
+            // 关闭原有连接并清空
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+
+            // 超过最大重连次数，切换为轮询模式
+            if (reconnectCount >= MAX_RECONNECT_COUNT) {
+                showStatus('WebSocket连接失败，将切换为轮询模式获取结果', 'error');
+                if (currentTask) {
+                    switchToPollingMode();
+                }
+                return;
+            }
+
+            try {
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = function() {
+                    reconnectCount = 0; // 重连成功，重置计数器
+                    updateConnStatus(true);
+                    showStatus('WebSocket连接成功，等待任务处理结果', 'info');
+                    // 停止轮询（如果开启）
+                    if (pollInterval) {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                    }
+                };
+
+                ws.onmessage = function(e) {
+                    try {
+                        const res = JSON.parse(e.data);
+                        if (res.type === 'task_result') {
+                            handleTaskResult(res.data);
+                        }
+                    } catch (err) {
+                        console.error('解析WebSocket消息失败：', err);
+                    }
+                };
+
+                ws.onclose = function() {
+                    updateConnStatus(false);
+                    reconnectCount++;
+                    const delay = Math.min(3 * reconnectCount, 30); // 重连间隔递增（3s→6s→...→30s）
+                    showStatus(`WebSocket连接断开，${delay}秒后尝试重连（剩余${MAX_RECONNECT_COUNT - reconnectCount}次）`, 'error');
+                    setTimeout(initWebSocket, delay * 1000);
+                };
+
+                ws.onerror = function(err) {
+                    console.error('WebSocket错误：', err);
+                    updateConnStatus(false);
+                };
+            } catch (err) {
+                console.error('创建WebSocket连接失败：', err);
+                reconnectCount++;
+                setTimeout(initWebSocket, 3000);
+            }
+        }
+
+        // 更新连接状态指示灯
+        function updateConnStatus(isConnected) {
+            const connEle = document.getElementById('connStatus');
+            if (isConnected) {
+                connEle.classList.add('connected');
+            } else {
+                connEle.classList.remove('connected');
+            }
+        }
+
+        // 校验输入框是否有效
+        function checkInputValid() {
+            const authCode = document.getElementById('authCode').value.trim();
+            const dynamicCode = document.getElementById('dynamicCode').value.trim();
+            // 增强校验：动态码是8位纯数字 + 授权码含3个下划线
+            const isDynamicCodeValid = /^\d{8}$/.test(dynamicCode);
+            const isAuthCodeValid = authCode.includes('_') && authCode.split('_').length === 4;
+            document.getElementById('submitBtn').disabled = !(isAuthCodeValid && isDynamicCodeValid);
+        }
+
+        // 提交任务
+        function submitTask() {
+            const authCode = document.getElementById('authCode').value.trim();
+            const dynamicCode = document.getElementById('dynamicCode').value.trim();
+            const submitBtn = document.getElementById('submitBtn');
+
+            submitBtn.disabled = true;
+            submitBtn.innerText = '提交中...';
+            showStatus('正在校验授权码并创建任务...', 'info');
+
+            // 清空之前的任务
+            currentTask = null;
+            renderCurrentTask();
+
+            // 10秒超时处理
+            const timeoutTimer = setTimeout(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerText = '提交处理';
+                showStatus('请求超时，请重试', 'error');
+            }, 10000);
+
+            fetch(`${HTTP_URL}/submit_number`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    auth_code: authCode,
+                    number: dynamicCode
+                })
+            }).then(res => res.json()).then(data => {
+                if (data.success) {
+                    showStatus(data.message, 'success');
+                    // 记录当前任务（处理中）
+                    currentTask = {
+                        task_id: data.task_id,
+                        number: dynamicCode,
+                        result: '处理中...',
+                        status: 'processing',
+                        create_time: new Date().toLocaleString()
+                    };
+                    renderCurrentTask();
+                    // 清空输入框
+                    document.getElementById('authCode').value = '';
+                    document.getElementById('dynamicCode').value = '';
+                } else {
+                    showStatus(data.message, 'error');
+                }
+            }).catch(err => {
+                showStatus(`提交失败：${err.message}`, 'error');
+            }).finally(() => {
+                clearTimeout(timeoutTimer); // 清除超时定时器
+                submitBtn.disabled = false;
+                submitBtn.innerText = '提交处理';
+            });
+        }
+
+        // 处理WebSocket推送的任务结果
+        function handleTaskResult(taskData) {
+            // 增加参数校验
+            if (!taskData || !taskData.task_id || !taskData.result) {
+                console.error('无效的任务结果数据：', taskData);
+                return;
+            }
+
+            // 若当前无任务，但收到结果，也更新为当前任务（兼容重连场景）
+            if (!currentTask || currentTask.task_id !== taskData.task_id) {
+                currentTask = {
+                    task_id: taskData.task_id,
+                    number: taskData.number || '未知',
+                    result: taskData.result,
+                    status: 'success',
+                    create_time: new Date().toLocaleString(),
+                    update_time: new Date().toLocaleString()
+                };
+            } else {
+                currentTask.result = taskData.result;
+                currentTask.status = 'success';
+                currentTask.update_time = new Date().toLocaleString();
+            }
+            renderCurrentTask();
+            //showStatus(`任务${taskData.task_id}处理完成`, 'success');
+        }
+
+        // 渲染当前任务
+        function renderCurrentTask() {
+            const resultEle = document.getElementById('currentTaskResult');
+            if (!currentTask) {
+                resultEle.innerHTML = '<div class="empty-tip">暂无任务，提交后将展示此处</div>';
+                return;
+            }
+            // 任务卡片样式区分状态
+            const cardClass = currentTask.status === 'processing' ? 'processing' : 'success';
+            resultEle.innerHTML = `
+                <div class="result-card ${cardClass}">
+                    <div class="task-id">任务ID：${currentTask.task_id} | 创建时间：${currentTask.create_time} ${currentTask.update_time ? '| 更新时间：' + currentTask.update_time : ''}</div>
+                    <div class="result-content">${currentTask.result}</div>
+                    <div class="result-actions">
+                        <button class="btn-sm btn-copy" onclick="copyResult()">复制结果</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 复制当前任务结果（兼容多浏览器）
+        function copyResult() {
+            if (!currentTask) return;
+            try {
+                // 现代浏览器剪贴板API
+                navigator.clipboard.writeText(currentTask.result).then(() => {
+                    showStatus('结果已复制到剪贴板', 'success');
+                }).catch(() => {
+                    // 兜底方案：创建临时输入框
+                    fallbackCopy(currentTask.result);
+                });
+            } catch (e) {
+                // 直接使用兜底方案
+                fallbackCopy(currentTask.result);
+            }
+        }
+
+        // 复制兜底函数
+        function fallbackCopy(text) {
+            const tempInput = document.createElement('input');
+            tempInput.value = text;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            try {
+                document.execCommand('copy');
+                showStatus('结果已复制到剪贴板', 'success');
+            } catch (err) {
+                showStatus('复制失败，请手动复制', 'error');
+            } finally {
+                document.body.removeChild(tempInput);
+            }
+        }
+
+        // 切换为HTTP轮询模式（WebSocket连接失败时兜底）
+        function switchToPollingMode() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+            }
+            // 每2秒轮询一次结果
+            pollInterval = setInterval(() => {
+                if (!currentTask) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                    return;
+                }
+                fetch(`${HTTP_URL}/get_result/${currentTask.task_id}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.success && data.result && data.result !== '处理中...') {
+                            currentTask.result = data.result;
+                            currentTask.status = 'success';
+                            currentTask.update_time = new Date().toLocaleString();
+                            renderCurrentTask();
+                            //showStatus(`任务${currentTask.task_id}处理完成（轮询）`, 'success');
+                            clearInterval(pollInterval);
+                            pollInterval = null;
+                        }
+                    })
+                    .catch(err => console.error('轮询失败：', err));
+            }, 2000);
+        }
+
+        // 显示状态提示
+        function showStatus(msg, type) {
+            const statusBar = document.getElementById('statusBar');
+            statusBar.style.display = 'block';
+            statusBar.classList.remove('status-success', 'status-error', 'status-info');
+            switch (type) {
+                case 'success':
+                    statusBar.classList.add('status-success');
+                    break;
+                case 'error':
+                    statusBar.classList.add('status-error');
+                    break;
+                case 'info':
+                    statusBar.classList.add('status-info');
+                    break;
+            }
+            statusBar.innerText = msg;
+            if (type !== 'error') {
+                setTimeout(() => {
+                    statusBar.style.display = 'none';
+                }, 3000);
+            }
+        }
+    </script>
+</body>
+</html>
